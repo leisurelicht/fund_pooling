@@ -1,0 +1,73 @@
+name: fund_pooling
+
+# =============================================================================
+# 两个镜像 / 两个容器：
+#   db  —— 官方 postgres 镜像：数据文件落在本地 ./database，pg_dump 备份写到 iCloud
+#   web —— 本项目镜像（Django + Gunicorn + WhiteNoise + 构建好的 Vue SPA）
+# =============================================================================
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: fund_pooling_db
+    restart: unless-stopped
+    shm_size: 256mb
+    stop_grace_period: 30s
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fund_pooling}
+      POSTGRES_USER: ${POSTGRES_USER:-fund_pooling}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请先在 .env 中设置 POSTGRES_PASSWORD}
+      # 数据实际写入挂载目录下的 pgdata/ 子目录，便于整体迁移与备份
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      # 数据库文件：本地磁盘
+      - "${PGDATA_HOST_PATH:?请先在 .env 中设置 PGDATA_HOST_PATH（本地数据目录）}:/var/lib/postgresql/data"
+    ports:
+      # 只监听本机，方便本地开发 / 排查；服务器部署可注释掉
+      - "127.0.0.1:${POSTGRES_PORT_HOST:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app_net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${WEB_IMAGE:-fund_pooling/web}:${APP_VERSION:-0.1.0}
+    container_name: fund_pooling_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 容器内通过服务名访问数据库，覆盖 .env 中面向本地开发的默认值
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      DJANGO_DEBUG: "false"
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    driver: bridge

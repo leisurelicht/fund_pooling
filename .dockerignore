@@ -1,0 +1,31 @@
+# 构建上下文为仓库根目录
+.git
+.gitignore
+.gitattributes
+
+# 环境变量与本地缓存
+.env
+.env.*
+!.env.example
+.cache
+.ruff_cache
+**/__pycache__
+**/*.py[cod]
+*.sqlite3
+
+# 本地数据库数据目录（体积大且与本镜像无关）
+database/
+
+# Python 虚拟环境 / 构建产物
+backend/.venv
+backend/staticfiles
+backend/media
+
+# 前端依赖与产物（镜像内会重新安装 / 构建）
+frontend/node_modules
+frontend/dist
+
+# 编辑器
+.vscode
+.idea
+.DS_Store
