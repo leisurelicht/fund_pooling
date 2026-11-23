@@ -75,7 +75,13 @@ fund_pooling/
 │   ├── package.json
 │   ├── package-lock.json
 │   └── vite.config.ts         # 开发代理 /api /admin /static → Django
-├── docker-compose.yml         # db + web 编排
+├── docker-compose.yml         # db + web 编排（开发 / 单机共用）
+├── docker-compose.prod.yml    # 生产覆盖：仅监听 127.0.0.1、不暴露 5432、资源限额
+├── deploy/
+│   ├── DEPLOY.md              # 单机部署指南（步骤 / 排错 / 安全清单）
+│   ├── deploy.sh              # 一键部署：备份 → 构建/拉取 → 启动 → 健康检查
+│   ├── Caddyfile              # Caddy 反代模板（自动 HTTPS）
+│   └── nginx.conf             # Nginx 反代模板（配合 certbot）
 ├── database/                  # 本地 PostgreSQL 数据（gitignore，绝不提交）
 ├── .env                       # 本机实际配置（gitignore，已生成）
 ├── .env.example               # 配置模板
@@ -237,6 +243,7 @@ npm run build      # 产出 dist/
 | --- | --- |
 | `make up` | 构建并启动 db + web |
 | `make down` | 停止并移除容器（保留本地数据与 iCloud 备份） |
+| `make deploy` | 生产部署 / 更新（调用 `deploy/deploy.sh`，可传 `ARGS="--skip-backup"`） |
 | `make build` | 只构建 web 镜像 |
 | `make ps` / `make logs` | 查看状态 / 跟踪日志 |
 | `make migrate` | 容器内执行数据库迁移 |
@@ -297,14 +304,26 @@ docker compose up -d --build         # 构建 + 启动
 docker compose up -d --force-recreate web   # 仅重建 web
 ```
 
-## 9. 生产部署建议
+## 9. 生产部署
 
-1. 修改 `.env`：`DJANGO_SECRET_KEY`、`POSTGRES_PASSWORD`，设置
-   `DJANGO_ALLOWED_HOSTS=<域名>`、`CSRF_TRUSTED_ORIGINS=https://<域名>`；
-2. 在宿主机前置 Nginx / Caddy 处理 HTTPS，转发到 `127.0.0.1:8000`；
-3. `docker compose up -d --build`；
-4. 按需执行 `make backup`（或由外部调度 / CI 定期调用）；备份目录可换成本地 / NAS / 对象存储；
-5. `PGDATA_HOST_PATH` 指向服务器本地磁盘。
+完整步骤、排错与安全清单见 **[deploy/DEPLOY.md](deploy/DEPLOY.md)**，这里是速览：
+
+1. 服务器准备 Docker（Compose ≥ 2.24），`database/` 目录 chown 999:999；
+2. 配置 `.env`：`DJANGO_SECRET_KEY`、`POSTGRES_PASSWORD`、`DJANGO_ALLOWED_HOSTS=<域名>`、
+   `CSRF_TRUSTED_ORIGINS=https://<域名>`，`PGDATA_HOST_PATH` / `BACKUP_HOST_PATH` 指向服务器本地目录；
+3. 部署：`make deploy` 或 `./deploy/deploy.sh`（首次加 `--skip-backup`），
+   自动备份 → 构建/拉取 → 启动 → 健康检查；
+4. 宿主机前置 Caddy / Nginx 处理 HTTPS，转发到 `127.0.0.1:8000`
+   （模板见 `deploy/Caddyfile`、`deploy/nginx.conf`）；
+5. 生产编排用 `docker-compose.prod.yml` 叠加：只监听 127.0.0.1、不暴露 5432、资源限额、Gunicorn 3 worker。
+
+```bash
+# 部署 / 更新
+make deploy
+./deploy/deploy.sh              # 等价写法，参数更直观
+# 生产环境手动操作
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+```
 
 ## 10. 测试与检查
 
