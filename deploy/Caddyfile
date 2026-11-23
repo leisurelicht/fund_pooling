@@ -1,0 +1,36 @@
+# fund_pooling — Caddy 反向代理配置模板
+#
+# 安装：brew/apt install caddy，或参考 https://caddyserver.com/docs/install
+# 使用：
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo sed -i '' 's/fund.example.com/你的域名/' /etc/caddy/Caddyfile   # macOS
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# 域名也可以用环境变量覆盖：DOMAIN=fund.example.com WEB_PORT=8000 caddy run
+
+{$DOMAIN:fund.example.com} {
+	encode zstd gzip
+
+	# 转发给 docker compose 中只监听 127.0.0.1 的 web 容器
+	reverse_proxy 127.0.0.1:{$WEB_PORT:8000}
+
+	# 上传体积上限（按业务调整）
+	request_body {
+		max_size 50MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/fund_pooling_access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
