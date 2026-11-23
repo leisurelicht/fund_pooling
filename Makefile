@@ -9,7 +9,7 @@ FRONTEND := frontend
 envval = $$(sed -n 's/^$(1)=//p' .env | sed 's/"//g')
 
 .PHONY: help env build up down restart logs ps migrate makemigrations shell superuser \
-	test lint format dev dev-db dev-backend dev-frontend info backup backup-list restore
+	test lint format dev dev-db dev-backend dev-frontend info backup backup-list restore deploy
 
 help: ## 显示所有可用命令
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -27,6 +27,9 @@ up: env ## 构建并启动 db + web 两个容器
 
 down: ## 停止并移除容器（本地数据与 iCloud 备份都不受影响）
 	$(COMPOSE) down
+
+deploy: ## 生产部署 / 更新（备份 → 构建或拉取 → 启动 → 健康检查）
+	@./deploy/deploy.sh $(ARGS)
 
 restart: ## 重启所有容器
 	$(COMPOSE) restart
