@@ -385,3 +385,49 @@ code {
 .field__input::placeholder {
   color: var(--text-muted);
 }
+
+/* 第三方登录（Apple / Google） */
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.login__divider::before,
+.login__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.login__oauth {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+
+/* 渲染完成前先隐藏但保留占位：SDK 需要能测量容器尺寸，
+   而用户不该看到空白区域或孤零零的分隔线 */
+.login__oauth:not(.login__oauth--ready) {
+  visibility: hidden;
+}
+
+.login__oauth + .login__oauth {
+  margin-top: 12px;
+}
+
+/* SDK 渲染的按钮在提交期间不接受再次点击 */
+.login__oauth--busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.login__oauth-google {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}

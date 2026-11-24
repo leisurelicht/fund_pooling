@@ -3,7 +3,10 @@ import { reactive } from 'vue'
 import {
   fetchMe,
   login as loginApi,
+  loginWithApple as loginAppleApi,
+  loginWithGoogle as loginGoogleApi,
   logout as logoutApi,
+  type AppleFullName,
   type User,
 } from '@/api/auth'
 
@@ -43,4 +46,17 @@ export async function logout(): Promise<void> {
     session.user = null
     session.loaded = true
   }
+}
+
+export async function loginWithApple(
+  idToken: string,
+  fullName?: AppleFullName | null,
+): Promise<void> {
+  session.user = (await loginAppleApi(idToken, fullName)).user
+  session.loaded = true
+}
+
+export async function loginWithGoogle(credential: string): Promise<void> {
+  session.user = (await loginGoogleApi(credential)).user
+  session.loaded = true
 }
