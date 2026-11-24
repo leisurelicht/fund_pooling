@@ -20,6 +20,7 @@ params = {
 
 
 def main() -> int:
+    """反复尝试连接数据库，成功返回 0，重试耗尽返回 1。"""
     for attempt in range(1, retries + 1):
         try:
             with psycopg.connect(**params):

@@ -14,6 +14,8 @@ admin.site.site_header = "Fund Pooling 管理后台"
 admin.site.site_title = "Fund Pooling"
 admin.site.index_title = "系统管理"
 
+# Django 要求 urlpatterns 必定为小写
+# pylint: disable=invalid-name
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("apps.core.urls")),
