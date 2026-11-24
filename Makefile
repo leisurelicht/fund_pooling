@@ -8,7 +8,7 @@ FRONTEND := frontend
 # 从 .env 读取变量值（去掉包裹的双引号）
 envval = $$(sed -n 's/^$(1)=//p' .env | sed 's/"//g')
 
-.PHONY: help env build up down restart logs ps migrate makemigrations shell superuser \
+.PHONY: help env build up down restart reload logs ps migrate makemigrations shell superuser \
 	test lint format dev dev-db dev-backend dev-frontend info backup backup-list restore deploy
 
 help: ## 显示所有可用命令
@@ -31,8 +31,12 @@ down: ## 停止并移除容器（本地数据与备份目录都不受影响）
 deploy: ## 生产部署 / 更新（备份 → 构建或拉取 → 启动 → 健康检查）
 	@./deploy/deploy.sh $(ARGS)
 
-restart: ## 重启所有容器
+restart: ## 重启容器进程（不重读 .env、不重建容器）
 	$(COMPOSE) restart
+
+reload: ## 重建容器使 .env 变更生效（不重新构建镜像，比 make up 快）
+	$(COMPOSE) up -d
+	@echo "已按 .env 重建容器：http://localhost:$${WEB_PORT:-8000}"
 
 logs: ## 跟踪查看容器日志
 	$(COMPOSE) logs -f --tail=100
@@ -55,8 +59,9 @@ superuser: ## 创建 Django 后台管理员
 test: ## 运行后端测试（Django test runner）
 	$(COMPOSE) exec web python manage.py test
 
-lint: ## 后端 ruff + 前端类型检查
+lint: ## 后端 ruff + mypy + 前端类型检查
 	cd $(BACKEND) && uv run ruff check .
+	cd $(BACKEND) && uv run mypy .
 	cd $(FRONTEND) && npm run type-check
 
 format: ## 格式化后端代码

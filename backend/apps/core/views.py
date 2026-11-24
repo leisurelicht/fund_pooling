@@ -1,23 +1,20 @@
-"""核心接口：健康检查、系统信息、登录鉴权、SPA 入口。"""
+"""核心接口：健康检查、系统信息、SPA 入口。
+
+账号 / 登录相关接口见 ``apps.accounts.views``。
+"""
 
 import platform
 import time
 
 import django
 from django.conf import settings
-from django.contrib.auth import authenticate
-from django.contrib.auth import login as django_login
-from django.contrib.auth import logout as django_logout
 from django.db import connection
 from django.db.utils import DatabaseError
 from django.http import HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.csrf import csrf_failure as default_csrf_failure
-from django.views.decorators.csrf import csrf_protect
-from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -31,17 +28,6 @@ def csrf_failure(request, reason: str = ""):
             status=403,
         )
     return default_csrf_failure(request, reason)
-
-
-def serialize_user(user) -> dict:
-    """返回给前端的用户信息（不含敏感字段）。"""
-    return {
-        "id": user.pk,
-        "username": user.get_username(),
-        "email": user.email,
-        "is_staff": user.is_staff,
-        "is_superuser": user.is_superuser,
-    }
 
 
 class ApiRootView(APIView):
@@ -60,9 +46,12 @@ class ApiRootView(APIView):
                     "health": request.build_absolute_uri("health/"),
                     "system": request.build_absolute_uri("system/"),
                     "csrf": request.build_absolute_uri("auth/csrf/"),
+                    "config": request.build_absolute_uri("auth/config/"),
                     "me": request.build_absolute_uri("auth/me/"),
                     "login": request.build_absolute_uri("auth/login/"),
                     "logout": request.build_absolute_uri("auth/logout/"),
+                    "apple": request.build_absolute_uri("auth/apple/"),
+                    "google": request.build_absolute_uri("auth/google/"),
                     "admin": request.build_absolute_uri("/admin/"),
                 },
             }
@@ -128,75 +117,6 @@ class SystemInfoView(APIView):
                 "database_name": settings.DATABASES["default"]["NAME"],
             }
         )
-
-
-class CsrfView(APIView):
-    """下发 CSRF Cookie（Vite 开发服务器直接提供页面时需要先补一次）。"""
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        """确保客户端拿到 csrftoken Cookie 并返回 token 值。"""
-        return Response({"csrfToken": get_token(request)})
-
-
-class MeView(APIView):
-    """当前登录用户；未登录返回 401，供前端路由守卫判断。"""
-
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        """已登录返回用户信息，未登录返回 401。"""
-        if not request.user.is_authenticated:
-            return Response({"detail": "未登录"}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response({"user": serialize_user(request.user)})
-
-
-@method_decorator(csrf_protect, name="dispatch")
-class LoginView(APIView):
-    """用户名 / 邮箱 + 密码登录，成功后写入 Django session。"""
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        """校验用户名/邮箱和密码，成功则创建登录会话。"""
-        # `username` 字段兼容用户名或邮箱（也接受 identifier 别名）
-        identifier = str(
-            request.data.get("username") or request.data.get("identifier") or ""
-        ).strip()
-        password = str(request.data.get("password", ""))
-
-        if not identifier or not password:
-            return Response(
-                {"detail": "请输入用户名/邮箱和密码"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = authenticate(request, username=identifier, password=password)
-        if user is None:
-            return Response(
-                {"detail": "用户名/邮箱或密码错误"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not user.is_active:
-            return Response(
-                {"detail": "账号已被禁用"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        django_login(request, user)
-        return Response({"user": serialize_user(user)})
-
-
-class LogoutView(APIView):
-    """退出登录，清除会话。"""
-
-    def post(self, request):
-        """结束当前会话，返回 204。"""
-        django_logout(request)
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class SpaView(View):

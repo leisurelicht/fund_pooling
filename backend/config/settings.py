@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "rest_framework",
     # 业务
     "apps.core",
+    "apps.accounts",
 ]
 
 MIDDLEWARE = [
@@ -124,7 +125,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # 认证：支持用户名或邮箱登录
 # ---------------------------------------------------------------------------
 AUTHENTICATION_BACKENDS = [
-    "apps.core.auth_backends.EmailOrUsernameBackend",
+    "apps.accounts.auth_backends.EmailOrUsernameBackend",
 ]
 
 # ---------------------------------------------------------------------------
@@ -208,6 +209,17 @@ CSRF_FAILURE_VIEW = "apps.core.views.csrf_failure"
 # 反向代理（Nginx / 网关）后启用
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 X_FRAME_OPTIONS = "DENY"
+
+# ---------------------------------------------------------------------------
+# 第三方登录（Apple / Google）
+# ---------------------------------------------------------------------------
+APPLE_CLIENT_ID = env("APPLE_CLIENT_ID")  # Service ID
+# 目前 id_token 验证模式不需要 APPLE_TEAM_ID。
+# 未来如需 server-side refresh token 流程，再启用下方配置：
+# APPLE_TEAM_ID = env("APPLE_TEAM_ID", "")
+# APPLE_KEY_ID = env("APPLE_KEY_ID", "")
+
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID")  # OAuth 2.0 Web 客户端 ID
 
 # ---------------------------------------------------------------------------
 # 日志

@@ -12,16 +12,45 @@ dependencies = [
     "whitenoise>=6.12.0,<7",
     "django-cors-headers>=4.9.0,<5",
     "python-dotenv>=1.1.1,<2",
+    "pyjwt[crypto]>=2.12.0,<3",
 ]
 
 [dependency-groups]
 dev = [
+    "django-stubs>=6.1.2",
+    "djangorestframework-stubs>=3.18.2",
+    "mypy>=2.4.1",
     "ruff>=0.14.0",
 ]
 
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+# 迁移文件由 Django 自动生成，不参与风格检查
+extend-exclude = ["*/migrations/*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "D1", "UP", "B", "DJ"]
+select = ["E", "F", "I", "N", "D1", "UP", "B", "DJ", "PL"]
+
+# ---------------------------------------------------------------------------
+# 类型检查
+# ---------------------------------------------------------------------------
+# 装好依赖后运行：uv run mypy .
+# 安装命令（需要能访问 PyPI）：
+#   uv add --dev mypy django-stubs djangorestframework-stubs
+[tool.mypy]
+python_version = "3.13"
+# django-stubs 插件：让 mypy 认识 ORM 的动态成员（objects / QuerySet 返回值等）
+plugins = ["mypy_django_plugin.main"]
+# Django 自动生成的迁移文件不做类型检查
+exclude = ["/migrations/"]
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+# 依赖都自带类型存根（含 djangorestframework-stubs / PyJWT / python-dotenv），
+# 因此不开启 ignore_missing_imports；将来引入无存根的库再按需放开。
+
+[tool.django-stubs]
+django_settings_module = "config.settings"

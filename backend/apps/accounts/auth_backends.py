@@ -1,7 +1,11 @@
 """自定义认证后端：支持用户名或邮箱登录。"""
 
+from typing import Any
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth.models import User
+from django.http import HttpRequest
 
 
 class EmailOrUsernameBackend(ModelBackend):
@@ -10,7 +14,13 @@ class EmailOrUsernameBackend(ModelBackend):
     邮箱匹配到多个账号时拒绝登录，提示用户改用用户名。
     """
 
-    def authenticate(self, _request, username=None, password=None, **kwargs):
+    def authenticate(
+        self,
+        request: HttpRequest | None,
+        username: str | None = None,
+        password: str | None = None,
+        **kwargs: Any,
+    ) -> User | None:
         """先按用户名精确匹配，再按邮箱（不区分大小写）匹配。"""
         user_model = get_user_model()
         identifier = username or kwargs.get(user_model.USERNAME_FIELD)

@@ -55,6 +55,14 @@ services:
       POSTGRES_PORT: "5432"
       DJANGO_DEBUG: "false"
       TZ: ${TZ:-Asia/Shanghai}
+      # 容器内访问境外服务（如 Google 公钥端点）需经宿主机代理：
+      # host.docker.internal 由 Docker Desktop 提供，指向宿主机。
+      # 不需要代理的部署在 .env 里写 CONTAINER_PROXY=（留空即禁用，
+      # 所以这里用 `-` 而非 `:-`：空值不会被默认值覆盖）。
+      HTTP_PROXY: ${CONTAINER_PROXY-http://host.docker.internal:1082}
+      HTTPS_PROXY: ${CONTAINER_PROXY-http://host.docker.internal:1082}
+      # 本机与容器间通信必须绕过代理，否则健康检查与数据库连接会走代理失败
+      NO_PROXY: ${CONTAINER_NO_PROXY:-localhost,127.0.0.1,::1,db}
     depends_on:
       db:
         condition: service_healthy

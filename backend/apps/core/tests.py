@@ -1,12 +1,9 @@
-"""核心应用测试：健康检查、登录鉴权、SPA 入口。"""
+"""核心应用的测试：健康检查、系统信息、SPA 入口。"""
 
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from django.contrib.auth.models import User
-from django.test import Client, RequestFactory, TestCase, override_settings
-from django.urls import reverse
+from django.test import RequestFactory, TestCase, override_settings
 
 from apps.core.views import SpaView
 
@@ -40,93 +37,6 @@ class HealthApiTests(TestCase):
         """未定义的 API 路径应返回 404（不能落到 SPA）。"""
         response = self.client.get("/api/not-exists/")
         self.assertEqual(response.status_code, 404)
-
-
-class AuthApiTests(TestCase):
-    """登录 / 登出 / 当前用户接口。"""
-
-    def setUp(self):
-        """创建测试用户（带邮箱，便于验证邮箱登录）。"""
-        self.username = "tester"
-        self.email = "Tester@Example.com"
-        self.password = "test-pass-123"
-        User.objects.create_user(self.username, email=self.email, password=self.password)
-
-    def login(self, username=None, password=None):
-        """以 JSON 方式调用登录接口，便于各用例复用。"""
-        return self.client.post(
-            reverse("core:auth-login"),
-            data=json.dumps(
-                {
-                    "username": self.username if username is None else username,
-                    "password": self.password if password is None else password,
-                }
-            ),
-            content_type="application/json",
-        )
-
-    def test_me_requires_login(self):
-        """未登录访问当前用户接口应返回 401。"""
-        response = self.client.get(reverse("core:auth-me"))
-        self.assertEqual(response.status_code, 401)
-
-    def test_login_success_returns_user(self):
-        """用户名 + 正确密码应登录成功并返回用户信息。"""
-        response = self.login()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["user"]["username"], self.username)
-
-    def test_login_with_email(self):
-        """使用邮箱也应可以登录。"""
-        response = self.login(username=self.email)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["user"]["username"], self.username)
-
-    def test_login_with_email_is_case_insensitive(self):
-        """邮箱登录不区分大小写。"""
-        response = self.login(username=self.email.lower())
-        self.assertEqual(response.status_code, 200)
-
-    def test_login_with_ambiguous_email_is_rejected(self):
-        """同一邮箱对应多个账号时应拒绝登录。"""
-        User.objects.create_user("tester2", email=self.email.lower(), password=self.password)
-        response = self.login(username=self.email)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("用户名/邮箱或密码错误", response.json()["detail"])
-
-    def test_login_wrong_password(self):
-        """密码错误应返回 400。"""
-        response = self.login(password="wrong-password")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("detail", response.json())
-
-    def test_login_missing_fields(self):
-        """缺少用户名或密码应返回 400。"""
-        response = self.login(username="", password="")
-        self.assertEqual(response.status_code, 400)
-
-    def test_login_requires_csrf(self):
-        """登录接口必须校验 CSRF，失败时返回 JSON 提示。"""
-        client = Client(enforce_csrf_checks=True)
-        response = client.post(
-            reverse("core:auth-login"),
-            data=json.dumps({"username": self.username, "password": self.password}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"], "CSRF 校验失败，请刷新页面后重试")
-
-    def test_login_then_me_then_logout(self):
-        """完整会话流程：登录 → 查询当前用户 → 登出 → 未登录。"""
-        self.assertEqual(self.login().status_code, 200)
-
-        me = self.client.get(reverse("core:auth-me"))
-        self.assertEqual(me.status_code, 200)
-        self.assertEqual(me.json()["user"]["username"], self.username)
-
-        self.assertEqual(self.client.post(reverse("core:auth-logout")).status_code, 204)
-
-        self.assertEqual(self.client.get(reverse("core:auth-me")).status_code, 401)
 
 
 class SpaViewTests(TestCase):
