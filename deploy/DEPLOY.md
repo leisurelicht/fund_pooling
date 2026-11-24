@@ -68,7 +68,7 @@ vi .env
 | `POSTGRES_PASSWORD` | 强密码 |
 | `DJANGO_ALLOWED_HOSTS` | 你的域名，如 `fund.example.com`（漏了会 400） |
 | `CSRF_TRUSTED_ORIGINS` | `https://fund.example.com` |
-| `PGDATA_HOST_PATH` | `/srv/fund_pooling/database`（不要用 iCloud 路径） |
+| `PGDATA_HOST_PATH` | `/srv/fund_pooling/database`（不要用云同步目录） |
 | `BACKUP_HOST_PATH` | `/srv/fund_pooling/backup` |
 | `WEB_PORT` | 默认 `8000`（仅本机监听，供反代） |
 

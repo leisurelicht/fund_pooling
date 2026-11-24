@@ -3,7 +3,7 @@
 Django + Vue 3 + PostgreSQL 的全栈项目骨架，使用 **uv** 管理 Python 版本与依赖、
 **Docker Compose** 编排两个独立镜像（数据库 / 服务）。
 数据库文件存放在**本地 `./database`**，
-`pg_dump` 备份写入 **iCloud Drive/Database/fund_pooling/backup**。
+`pg_dump` 备份写入宿主机上由 `BACKUP_HOST_PATH` 指定的目录。
 
 - 后端：Django 6.1 + Django REST framework
 - 前端：Vue 3 + Vite + TypeScript
@@ -35,7 +35,7 @@ Django + Vue 3 + PostgreSQL 的全栈项目骨架，使用 **uv** 管理 Python 
                                         ▼
                         ./database/pgdata（本地磁盘，运行中的数据）
 
-make backup（宿主机执行）── pg_dump 标准输出重定向 ──▶ iCloud Drive/.../fund_pooling/backup
+make backup（宿主机执行）── pg_dump 标准输出重定向 ──▶ $BACKUP_HOST_PATH（宿主机备份目录）
                             （容器不需要挂载备份目录，只存 .dump，可随时重建）
 ```
 
@@ -43,7 +43,7 @@ make backup（宿主机执行）── pg_dump 标准输出重定向 ──▶ i
 
 | 镜像 | 容器 | 说明 |
 | --- | --- | --- |
-| `postgres:17-alpine` | `fund_pooling_db` | 数据库，数据落在本地 `./database`，备份输出到 iCloud |
+| `postgres:17-alpine` | `fund_pooling_db` | 数据库，数据落在本地 `./database`，备份输出到宿主机备份目录 |
 | `fund_pooling/web:0.1.0` | `fund_pooling_web` | 多阶段构建：Node 构建前端 → uv 安装依赖 → Python slim 运行 Gunicorn |
 
 web 只在 db 通过健康检查后启动，启动脚本自动执行数据库迁移。
@@ -103,7 +103,7 @@ fund_pooling/
 ```bash
 cd ~/Code/fund_pooling
 
-# 环境变量：本仓库已生成 .env（含随机密钥、本地数据目录、iCloud 备份目录）
+# 环境变量：本仓库已生成 .env（含随机密钥、本地数据目录、备份目录）
 # 新克隆时执行：
 cp .env.example .env        # 然后修改 SECRET_KEY / POSTGRES_PASSWORD / PGDATA_HOST_PATH / BACKUP_HOST_PATH
 
@@ -144,7 +144,7 @@ make superuser
 # 或：在 .env 里配置 DJANGO_SUPERUSER_USERNAME / PASSWORD / EMAIL 后重新 make up
 ```
 
-停止（**不会**删除本地数据库与 iCloud 备份）：
+停止（**不会**删除本地数据库与备份文件）：
 
 ```bash
 make down
@@ -175,12 +175,12 @@ ls -lh database/pgdata | head
 docker compose exec db psql -U fund_pooling -d fund_pooling -c '\l'
 ```
 
-### 4.2 备份：写入 iCloud Drive
+### 4.2 备份：写入宿主机备份目录
 
 `pg_dump` 输出由 `.env` 的 `BACKUP_HOST_PATH` 指定（宿主机路径，**不挂载进容器**）：
 
 ```
-BACKUP_HOST_PATH="/Users/Licht/Library/Mobile Documents/com~apple~CloudDocs/Database/fund_pooling/backup"
+BACKUP_HOST_PATH="/path/to/backups/fund_pooling"          # 可指向本地磁盘、NAS 或云同步目录
 ```
 
 - 格式：`pg_dump -Fc`（自定义格式，压缩 + 可按需选择恢复）
@@ -202,7 +202,7 @@ make down
 make up
 ```
 
-> 若此前数据曾放在 iCloud（早期版本），迁移后旧目录会以 `pgdata.migrated-*` 的形式保留，
+> 若此前数据曾放在云同步目录（早期配置），迁移后旧目录会以 `pgdata.migrated-*` 的形式保留，
 > 确认本地运行无误后可自行删除。
 
 彻底清空数据库（**危险**）：
@@ -258,7 +258,7 @@ npm run build      # 产出 dist/
 | 命令 | 说明 |
 | --- | --- |
 | `make up` | 构建并启动 db + web |
-| `make down` | 停止并移除容器（保留本地数据与 iCloud 备份） |
+| `make down` | 停止并移除容器（保留本地数据与备份文件） |
 | `make deploy` | 生产部署 / 更新（调用 `deploy/deploy.sh`，可传 `ARGS="--skip-backup"`） |
 | `make build` | 只构建 web 镜像 |
 | `make ps` / `make logs` | 查看状态 / 跟踪日志 |
@@ -268,10 +268,10 @@ npm run build      # 产出 dist/
 | `make superuser` | 创建后台管理员 |
 | `make test` | 后端测试（容器内） |
 | `make lint` / `make format` | ruff + 前端类型检查 / 格式化 |
-| `make backup` | `pg_dump` 到 iCloud 备份目录（自动清理过期备份） |
-| `make backup-list` | 列出 iCloud 中的备份文件 |
-| `make restore FILE=fund_pooling-xxx.dump` | 从 iCloud 备份恢复 |
-| `make info` | 查看本地数据目录与 iCloud 备份占用 |
+| `make backup` | `pg_dump` 到备份目录（自动清理过期备份） |
+| `make backup-list` | 列出备份文件 |
+| `make restore FILE=fund_pooling-xxx.dump` | 从备份恢复 |
+| `make info` | 查看本地数据目录与备份目录占用 |
 | `make dev-db` / `dev-backend` / `dev-frontend` | 本地开发三件套 |
 
 ## 7. 环境变量
@@ -356,9 +356,9 @@ cd frontend && npm run type-check
   entrypoint 会等待数据库并在失败时退出。
 - **前端 503「前端尚未构建」**：说明直接跑了 Django 而没构建镜像，
   用 `make up`，开发时访问 Vite（5173）。
-- **备份文件在哪**：`make info` / `make backup-list`，或直接看 iCloud 的
-  `Database/fund_pooling/backup`；保留天数由 `BACKUP_KEEP_DAYS` 控制。
-- **路径含空格**：`BACKUP_HOST_PATH` 在 `.env` 中必须加引号（iCloud 路径含空格）。
+- **备份文件在哪**：`make info` / `make backup-list` 会直接打印 `BACKUP_HOST_PATH`
+  的实际取值；保留天数由 `BACKUP_KEEP_DAYS` 控制。
+- **路径含空格**：`BACKUP_HOST_PATH` 路径含空格时必须在 `.env` 中加引号。
 - **Docker Desktop 文件共享**：需包含 `/Users`（默认包含），否则本地 `database/` 无法挂载。
 - **首次启动较慢**：`db` 健康检查 `start_period` 60s，`web` 需等 `db` healthy。
 - **局域网 / 其他设备访问**：把访问地址的 IP 或域名加入 `.env` 的

@@ -25,7 +25,7 @@ up: env ## 构建并启动 db + web 两个容器
 	$(COMPOSE) up -d --build
 	@echo "前端: http://localhost:$${WEB_PORT:-8000}  |  后台: http://localhost:$${WEB_PORT:-8000}/admin/"
 
-down: ## 停止并移除容器（本地数据与 iCloud 备份都不受影响）
+down: ## 停止并移除容器（本地数据与备份目录都不受影响）
 	$(COMPOSE) down
 
 deploy: ## 生产部署 / 更新（备份 → 构建或拉取 → 启动 → 健康检查）
@@ -76,13 +76,13 @@ dev-backend: ## 本地运行 Django（自动重载）
 dev-frontend: ## 本地运行 Vite 开发服务器
 	cd $(FRONTEND) && npm run dev
 
-info: ## 查看数据目录（本地）与备份目录（iCloud）占用
+info: ## 查看数据目录与备份目录占用
 	@DATA="$(call envval,PGDATA_HOST_PATH)"; BK="$(call envval,BACKUP_HOST_PATH)"; \
 	echo "数据目录（本地）: $$DATA"; du -sh "$$DATA" 2>/dev/null || echo "  （尚未初始化）"; \
-	echo; echo "备份目录（iCloud）: $$BK"; du -sh "$$BK" 2>/dev/null || echo "  （尚无备份）"; \
+	echo; echo "备份目录: $$BK"; du -sh "$$BK" 2>/dev/null || echo "  （尚无备份）"; \
 	ls -lht "$$BK" 2>/dev/null | head -6
 
-backup: ## 导出数据库到 iCloud 备份目录（pg_dump 输出重定向落盘，容器无需挂载）
+backup: ## 导出数据库到备份目录（pg_dump 输出重定向落盘，容器无需挂载）
 	@set -euo pipefail; \
 	BK="$(call envval,BACKUP_HOST_PATH)"; \
 	mkdir -p "$$BK"; \
@@ -93,11 +93,11 @@ backup: ## 导出数据库到 iCloud 备份目录（pg_dump 输出重定向落�
 	KEEP="$(call envval,BACKUP_KEEP_DAYS)"; \
 	find "$$BK" -maxdepth 1 -name 'fund_pooling-*.dump' -mtime +$${KEEP:-14} -delete
 
-backup-list: ## 列出 iCloud 中的备份文件
+backup-list: ## 列出备份文件
 	@BK="$(call envval,BACKUP_HOST_PATH)"; \
 	if [ -d "$$BK" ]; then ls -lht "$$BK" | head -20; else echo "（尚无备份）"; fi
 
-restore: ## 从 iCloud 备份恢复（FILE=fund_pooling-xxx.dump，先用 make backup-list 查看）
+restore: ## 从备份恢复（FILE=fund_pooling-xxx.dump，先用 make backup-list 查看）
 	@set -euo pipefail; \
 	BK="$(call envval,BACKUP_HOST_PATH)"; \
 	test -n "$(FILE)" || { echo "用法: make restore FILE=fund_pooling-20260101-030000.dump"; exit 1; }; \
