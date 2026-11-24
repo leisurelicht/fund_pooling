@@ -254,7 +254,7 @@ async function handleGoogleCredential(response: GoogleCredentialResponse) {
         <span class="brand__mark">FP</span>
         <div>
           <h1 class="login__title">Fund Pooling</h1>
-          <p class="login__subtitle">资金池管理平台</p>
+          <p class="login__subtitle">基金管理平台</p>
         </div>
       </div>
 

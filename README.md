@@ -1,4 +1,4 @@
-# Fund Pooling · 资金池管理平台
+# Fund Pooling · 基金管理平台
 
 Django + Vue 3 + PostgreSQL 的全栈项目骨架，使用 **uv** 管理 Python 版本与依赖、
 **Docker Compose** 编排两个独立镜像（数据库 / 服务）。

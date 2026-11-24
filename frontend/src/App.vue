@@ -28,7 +28,7 @@ async function handleLogout() {
         <span class="brand__mark">FP</span>
         <div>
           <h1 class="brand__title">Fund Pooling</h1>
-          <p class="brand__subtitle">资金池管理平台</p>
+          <p class="brand__subtitle">基金管理平台</p>
         </div>
       </div>
       <div class="topbar__meta">
