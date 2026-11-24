@@ -26,14 +26,17 @@ def env(key: str, default: str = "") -> str:
 
 
 def env_bool(key: str, default: bool = False) -> bool:
+    """读取布尔型环境变量（1/true/yes/on 视为真）。"""
     return env(key, str(default)).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def env_list(key: str, default: str = "") -> list[str]:
+    """读取逗号分隔的环境变量并返回列表。"""
     return [item.strip() for item in env(key, default).split(",") if item.strip()]
 
 
 def env_int(key: str, default: int) -> int:
+    """读取整型环境变量，非法值回退到默认值。"""
     try:
         return int(env(key, str(default)))
     except ValueError:
@@ -118,6 +121,13 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
+# 认证：支持用户名或邮箱登录
+# ---------------------------------------------------------------------------
+AUTHENTICATION_BACKENDS = [
+    "apps.core.auth_backends.EmailOrUsernameBackend",
+]
+
+# ---------------------------------------------------------------------------
 # 密码校验
 # ---------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
@@ -185,6 +195,15 @@ CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     "http://localhost:8000,http://127.0.0.1:8000",
 )
+
+# 会话 / CSRF Cookie
+# 前端是 SPA，需要读取 csrftoken 并放到 X-CSRFToken 请求头
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = False
+# API 的 CSRF 失败返回 JSON，方便 SPA 展示错误
+CSRF_FAILURE_VIEW = "apps.core.views.csrf_failure"
 
 # 反向代理（Nginx / 网关）后启用
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
