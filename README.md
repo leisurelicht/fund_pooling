@@ -66,9 +66,12 @@ fund_pooling/
 │   └── .python-version        # 3.13
 ├── frontend/
 │   ├── src/
-│   │   ├── api/               # 接口封装（fetch + 统一错误处理）
+│   │   ├── api/               # 接口封装（fetch + CSRF + 统一错误处理）
+│   │   ├── auth/              # 登录状态（session）
 │   │   ├── components/        # StatusCard 等组件
-│   │   ├── App.vue            # 服务状态看板
+│   │   ├── router/            # 路由与登录守卫
+│   │   ├── views/             # 页面：登录页 / 首页看板
+│   │   ├── App.vue            # 布局（顶栏、用户信息、退出登录）
 │   │   ├── main.ts
 │   │   └── style.css
 │   ├── index.html
@@ -116,12 +119,25 @@ make logs
 
 | 地址 | 说明 |
 | --- | --- |
-| http://localhost:8000 | 前端看板（Vue SPA） |
+| http://localhost:8000 | 前端看板（Vue SPA，需登录） |
+| http://localhost:8000/login | 登录页（未登录访问其他页面会自动跳转到这里） |
 | http://localhost:8000/api/health/ | 健康检查（含数据库连通性） |
 | http://localhost:8000/api/system/ | 运行环境信息 |
 | http://localhost:8000/admin/ | Django 管理后台 |
 
-创建后台管理员：
+**登录与鉴权**：前端使用 Django Session 认证，支持**用户名或邮箱**登录
+（邮箱不区分大小写；同一邮箱对应多个账号时会被拒绝，请改用用户名）。
+未登录访问 `/` 等页面时，路由守卫会跳转 `/login?redirect=<原地址>`，
+登录成功后回到原地址；已登录访问 `/login` 会自动回首页。
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/api/auth/csrf/` | GET | 下发 CSRF Cookie（SPA 自动调用） |
+| `/api/auth/me/` | GET | 当前登录用户，未登录返回 401 |
+| `/api/auth/login/` | POST | 登录（`username` 字段接受用户名或邮箱，+ `password`） |
+| `/api/auth/logout/` | POST | 退出登录 |
+
+创建账号（登录页使用的就是 Django 用户）：
 
 ```bash
 make superuser
@@ -354,6 +370,11 @@ cd frontend && npm run type-check
   而这些表体积很小（约 440 KB，全库 8.6 MB）。要扩展用户字段时，加
   `UserProfile`（OneToOne）或自定义 `AUTH_USER_MODEL`；要多系统统一登录时，
   拆的是**认证服务**（OIDC / Keycloak），而不是数据库。
+- **忘记密码 / 新增登录账号**：`docker compose exec web python manage.py changepassword <用户名>`；
+  新增账号 `make superuser`（或在 Admin 的用户管理里创建）。
+- **可以用邮箱登录吗**：可以，登录页输入用户名或邮箱都行（邮箱不区分大小写）。
+  邮箱需在 Admin 用户资料或 `create_user(..., email=...)` 中填写；若同一邮箱对应多个账号，
+  登录会被拒绝，请改用用户名。
 - **如何进入数据库**：`docker compose exec db psql -U fund_pooling -d fund_pooling`。
 
 ## License
