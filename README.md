@@ -347,6 +347,13 @@ cd frontend && npm run type-check
 - **首次启动较慢**：`db` 健康检查 `start_period` 60s，`web` 需等 `db` healthy。
 - **局域网 / 其他设备访问**：把访问地址的 IP 或域名加入 `.env` 的
   `DJANGO_ALLOWED_HOSTS`（如 `localhost,127.0.0.1,192.168.1.10`）。
+- **`auth_*` / `django_*` 表为什么和业务表同库？**：这是 Django 的标准形态，
+  **不建议拆成独立的 user/auth 库**——跨库外键不被支持（业务模型
+  `ForeignKey(AUTH_USER_MODEL)` 会失效）、`transaction.atomic()` 无法跨库，
+  且 Admin / Session / ContentType 都依赖 `auth_user` 在同一库；
+  而这些表体积很小（约 440 KB，全库 8.6 MB）。要扩展用户字段时，加
+  `UserProfile`（OneToOne）或自定义 `AUTH_USER_MODEL`；要多系统统一登录时，
+  拆的是**认证服务**（OIDC / Keycloak），而不是数据库。
 - **如何进入数据库**：`docker compose exec db psql -U fund_pooling -d fund_pooling`。
 
 ## License
