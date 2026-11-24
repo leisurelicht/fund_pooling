@@ -1,0 +1,12 @@
+{
+  // 本项目的 lint 由 ruff 负责、类型由 mypy 负责。
+  // Pylint 对 Django 的动态成员（objects / 关系字段）会持续误报
+  // E1101 no-member，且三条配置并行维护成本高于收益——
+  // ruff 的 PL 系列已覆盖 Pylint 的大部分规则。
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff"
+  ],
+  "unwantedRecommendations": ["ms-python.pylint"]
+}

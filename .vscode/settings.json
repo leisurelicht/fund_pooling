@@ -1,0 +1,43 @@
+{
+  // ── 语言服务器 ──────────────────────────────────────────────────
+  // 用 Pylance 做补全和基础类型提示。
+  // 注意：Pylance 不执行 mypy 的 django-stubs 插件，仍会把 models 的 objects /
+  // 外键关系当成普通属性，故关闭 reportAttributeAccessIssue。
+  // 项目不使用 Pylint —— lint 由 ruff（含 PL 系列）负责、类型由 mypy 负责，
+  // Pylint 见 extensions.json 的 unwantedRecommendations。
+  "python.languageServer": "Pylance",
+
+  // ── Python 解释器 ────────────────────────────────────────────────
+  // 使用 backend 下由 uv 管理的虚拟环境，保证 Pylance 能看到 Django / DRF 的类型
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+
+  // Django 项目的导入根是 backend/（不是仓库根），
+  // 补上之后 Pylance 才能解析 apps.* / config.* 这些导入
+  "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
+
+  // ── 关闭一条 Django 特有的误报 ──────────────────────────────────
+  // Django 的 objects 等成员由 ModelBase 元类在运行时注入，
+  // django-stubs 的 mypy 插件能识别，但 Pylance 不执行 mypy 插件，
+  // 于是每个模型都会报 "Class 'X' has no 'objects' member"。
+  // 类型正确性以 `uv run mypy .` 为准（已接入 make lint），这里只关掉这条误报。
+  // 注意：这也会一并关闭普通类的属性拼写检查，若想更精确可改用
+  // 行内 `# pyright: ignore[reportAttributeAccessIssue]`。
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportAttributeAccessIssue": "none"
+  },
+
+  // ── 编辑器一致性 ────────────────────────────────────────────────
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.rulers": [100],
+
+  // ── 中文标点 ────────────────────────────────────────────────────
+  // 本项目注释、docstring、UI 文案都用中文，全角标点（，。（）：「」）是正确排版。
+  // VS Code 默认会把全角括号这类字符标为「易混淆」，声明允许中文区域后不再提示。
+  // 注意：这里只放行「在中文里常见的字符」，不是整体关闭 —— 俄文字母 а 与
+  // 拉丁字母 a 混用之类的真实风险仍然会被检出。
+  "editor.unicodeHighlight.allowedLocales": {
+    "zh-hans": true,
+    "zh-hant": true
+  }
+}
