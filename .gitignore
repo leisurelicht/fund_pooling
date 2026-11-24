@@ -247,3 +247,5 @@ backend/media/
 
 # macOS
 .DS_Store
+
+.history
