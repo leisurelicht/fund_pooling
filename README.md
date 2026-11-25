@@ -360,6 +360,10 @@ cd frontend && npm run type-check
   的实际取值；保留天数由 `BACKUP_KEEP_DAYS` 控制。
 - **路径含空格**：`BACKUP_HOST_PATH` 路径含空格时必须在 `.env` 中加引号。
 - **Docker Desktop 文件共享**：需包含 `/Users`（默认包含），否则本地 `database/` 无法挂载。
+- **构建报 `failed to update builder last activity time ... operation not permitted`**：
+  BuildKit 无法写入 `~/.docker/buildx/activity`。把 buildx 配置目录指到可写位置即可：
+  `BUILDX_CONFIG=$(mktemp -d) docker compose build`。不要用 `DOCKER_BUILDKIT=0` 绕过——
+  Dockerfile 使用了 `RUN --mount`，旧构建器不支持。
 - **首次启动较慢**：`db` 健康检查 `start_period` 60s，`web` 需等 `db` healthy。
 - **局域网 / 其他设备访问**：把访问地址的 IP 或域名加入 `.env` 的
   `DJANGO_ALLOWED_HOSTS`（如 `localhost,127.0.0.1,192.168.1.10`）。
