@@ -1,26 +1,25 @@
 # 持仓管理系统 — 前端实施文档
 
-> 状态：页面与样式已完成，Mock 已移除 | 更新：2026-11-25（修订 2）
+> 状态：前端代码已回退为空壳，等待按本文重新实现 | 更新：2026-11-26（修订 5）
 >
-> 页面结构、样式、交互已完成；数据层改为直接调用 `/api` 接口。后端未实现前，
-> 页面显示空状态并在顶部提示接口错误。
+> 设计依据见 `fund-holdings-design.md`（页面）与 `fund-holdings-arch-design.md`（接口契约）。
+> 本文只写前端怎么落地，不重复为什么这样设计。
 >
-> **注意：本文的类型定义与接口签名已落后于数据模型**（缺 currency / is_listed / venue /
-> transfer_group / 转移类型 / 分页 / 双池成本字段）。以后端接口对接时一起更新，不要照本文
-> 直接改类型。
+> 当前代码只保留登录页与服务状态看板（回到持仓功能开发之前的状态）；§二 的目录与 §七 的改造
+> 清单是实现目标，不是现状。
 
 ---
 
-## 一、实施策略
+## 一、当前状态
 
-分四步走，每步产出可独立验证的页面：
-
-| 步骤 | 内容 | 验收 |
+| 阶段 | 状态 | 说明 |
 |---|---|---|
-| S1 骨架 | 左侧导航 + 路由 + 所有页面空壳 + 全局样式 | 五个导航项可切换，页面不报错 |
-| S2 总览页 | 资产卡片 + 持仓表格 + 工具栏 + 列设置 | Mock 数据渲染正确，排序/列切换/视图切换可用 |
-| S3 其他页面 | 交易页、定投页、资产详情页、设置页 | 各自交互可用，数据为 mock |
-| S4 对接 | composable 层替换为真实 API | 逐页切换，旧 mock 保留作为 fallback |
+| S1 骨架 | 已完成 | 侧栏、五个路由、六个页面壳、全局样式与色板 |
+| S2 总览 | 已完成 | 指标条、持仓表、列设置、记一笔浮层 |
+| S3 其他页 | 已完成 | 交易、定投、资产详情、设置，交互可点 |
+| S4 对接 | **进行中** | `api/portfolio.ts` 已建，但**类型仍是旧模型**，需要按本文改造 |
+
+代码现状与目标契约的差距集中在四处：类型字段、分页、操作入口、新增的转移与手工价格。下面按文件列出改法。
 
 ---
 
@@ -29,114 +28,82 @@
 ```
 frontend/src/
 ├── api/
-│   ├── client.ts              # 已有，不变
-│   ├── auth.ts                # 已有，不变
-│   ├── system.ts              # 已有，不变
-│   └── portfolio.ts           # 新增：所有业务接口
-├── auth/
-│   └── session.ts             # 已有，不变
+│   ├── client.ts              # 已有：fetch + CSRF + 统一错误
+│   └── portfolio.ts           # 已有：业务接口，需补分页与新端点
 ├── composables/
-│   ├── usePositions.ts        # 新增：持仓数据 + 视图切换 + 排序
-│   ├── useTransactions.ts     # 新增：交易流水 + 待确认
-│   ├── useSipPlans.ts         # 新增：定投计划
-│   ├── useSummary.ts          # 新增：总览头部数字
-│   ├── useChannels.ts         # 新增：渠道管理
-│   └── useAssetDetail.ts      # 新增：资产详情
+│   ├── useSummary.ts          # 已有：总览 + 60 秒刷新
+│   ├── usePositions.ts        # 已有：需改服务端排序 / 分页 / totals
+│   ├── useTransactions.ts     # 已有：需补筛选参数与分页
+│   ├── useSipPlans.ts         # 已有：需补创建 / 修改 / 结束
+│   ├── useChannels.ts         # 已有：需补归档过滤与删除
+│   └── useAssetDetail.ts      # 已有：需补价格分组与最近交易
 ├── components/
-│   ├── app/
-│   │   ├── AppSidebar.vue     # 新增：左侧导航
-│   │   └── AppLayout.vue      # 新增：侧栏 + 内容区壳
+│   ├── app/AppTopbar.vue      # 已有：顶部导航、五入口、用户菜单
 │   ├── overview/
-│   │   ├── AssetCards.vue     # 新增：资产卡片区
-│   │   ├── PositionTable.vue  # 新增：持仓表格
-│   │   ├── ColumnSettings.vue # 新增：列设置弹出面板
-│   │   └── RecordEntry.vue    # 新增：记一笔浮层
+│   │   ├── AssetCards.vue     # 已有：指标条
+│   │   ├── PositionTable.vue  # 已有：需改服务端排序 + totals + 场所/币种
+│   │   ├── ColumnSettings.vue # 已有
+│   │   └── RecordEntry.vue    # 已有：需加入场所、成交汇率、转移
 │   ├── transactions/
-│   │   ├── PendingSection.vue # 新增：待确认区
-│   │   ├── TransactionTable.vue # 新增：流水表
-│   │   └── ConfirmDialog.vue  # 新增：确认弹窗
+│   │   ├── PendingSection.vue # 已有：需分「手动可改可删」与「定投只能作废」
+│   │   ├── TransactionTable.vue # 已有：需加操作列、场所、来源筛选、分页
+│   │   ├── ConfirmDialog.vue  # 已有：三字段，confirm_date 由服务端写
+│   │   ├── TransferForm.vue   # 新增：转移专用表单
+│   │   └── Pagination.vue     # 新增：通用分页控件
 │   ├── sips/
-│   │   ├── SipCard.vue        # 新增：定投计划卡片
-│   │   └── SipForm.vue        # 新增：新建/编辑计划表单
+│   │   ├── SipCard.vue        # 已有：需补下次扣款、累计已投、期次状态
+│   │   └── SipForm.vue        # 已有：需补每日频率与顺延策略
 │   ├── settings/
-│   │   └── ChannelManager.vue # 新增：渠道管理
+│   │   ├── ChannelManager.vue # 已有：需补删除与「定投计划也占用」提示
+│   │   ├── DataSource.vue     # 新增：价格/汇率开关、同步状态、手工填汇率
+│   │   └── DataDangerZone.vue # 新增：重算快照、清空数据
 │   ├── asset/
-│   │   └── AssetDetail.vue    # 新增：资产详情内容
+│   │   ├── AssetDetail.vue    # 已有：需补收盘价/折溢价、价格列表、返回
+│   │   └── PriceEditor.vue    # 新增：手工填价格 + 删除回退
 │   └── shared/
-│       ├── EmptyState.vue     # 新增：空状态占位
-│       └── ErrorBanner.vue    # 新增：异常提示条
-├── mock/
-│   ├── positions.ts           # 新增：持仓假数据
-│   ├── transactions.ts        # 新增：交易假数据
-│   ├── summary.ts             # 新增：总览假数据
-│   ├── sips.ts                # 新增：定投假数据
-│   ├── channels.ts            # 新增：渠道假数据
-│   └── assets.ts              # 新增：资产详情假数据
-├── router/
-│   └── index.ts               # 已有，加新路由
-├── types/
-│   ├── appleid.d.ts           # 已有，不变
-│   ├── google.d.ts            # 已有，不变
-│   └── portfolio.ts           # 新增：业务类型定义
-├── views/
-│   ├── HomeView.vue           # 改为总览页（重写）
-│   ├── LoginView.vue          # 已有，不变
-│   ├── TransactionsView.vue   # 新增
-│   ├── SipsView.vue           # 新增
-│   ├── AnalysisView.vue       # 新增（空壳）
-│   ├── SettingsView.vue       # 新增
-│   └── AssetDetailView.vue    # 新增
-├── App.vue                    # 重写：AppLayout 替换旧顶栏
-├── main.ts                    # 已有，不变
-└── style.css                  # 已有，增量加变量
+│       ├── EmptyState.vue     # 已有
+│       └── ErrorBanner.vue    # 已有
+├── types/portfolio.ts         # 需整体重写（见 §三）
+├── router/index.ts            # 已有：七条路由 + 分块失效自动刷新
+├── views/                     # 六个页面，见 §七
+├── App.vue                    # 已有：顶栏 + 内容区 + 退出登录
+└── style.css                  # 已有：slate 色板、涨跌色、侧栏宽度
 ```
 
 ---
 
-## 三、类型定义
-
-`types/portfolio.ts`：
+## 三、类型定义（目标状态）
 
 ```ts
-// 资产类型
-export type AssetType = 'fund' | 'stock' | 'bond' | 'money' | 'index' | 'qdii' | 'fof' | 'other'
+export type Venue = 'exchange' | 'otc'
+export type Market = 'CN' | 'US'
+export type Currency = 'CNY' | 'USD'
+export type PriceKind = 'nav' | 'close' | 'iopv'
+
+export type AssetType = 'stock' | 'mix' | 'bond' | 'index' | 'qdii' | 'fof' | 'money' | 'other'
 
 export interface Asset {
   code: string
   name: string
   type: AssetType
-  manager?: string
-  risk_level?: string
+  currency: Currency
+  market: Market
+  is_listed: boolean
+  manager?: string | null
+  risk_level?: string | null
   status: 'normal' | 'liquidated' | 'suspended'
 }
 
-// 价格
 export interface AssetPrice {
-  price: number          // 单位净值 / 收盘价
-  acc_price?: number     // 累计净值（仅基金）
-  daily_change?: number  // 日涨跌幅，小数（0.0123 = 1.23%）
-  date: string           // YYYY-MM-DD
+  date: string
+  kind: PriceKind
+  price: string
   source: 'auto' | 'manual'
 }
 
-// 渠道
-export type ChannelType = 'third_party' | 'bank' | 'broker' | 'direct'
-
-export interface Channel {
-  id: number
-  name: string
-  type: ChannelType
-  is_default: boolean
-  is_archived: boolean
-}
-
-// 交易
-export type TransactionType = 'buy' | 'sell' | 'cash_dividend'
-  | 'reinvest_dividend' | 'share_adjustment' | 'opening_balance'
-
-export type TransactionStatus = 'pending' | 'confirmed' | 'voided'
-
-export type TransactionSource = 'manual' | 'import_csv' | 'sip'
+export type TransactionType =
+  | 'buy' | 'sell' | 'cash_dividend' | 'reinvest_dividend'
+  | 'share_adjustment' | 'opening_balance' | 'transfer_out' | 'transfer_in'
 
 export interface Transaction {
   id: number
@@ -145,54 +112,66 @@ export interface Transaction {
   asset_type: AssetType
   channel_id: number
   channel_name: string
+  venue: Venue
   type: TransactionType
   trade_date: string
-  confirm_date?: string
-  amount: string        // 正数金额
-  shares: string        // 份额
-  nav: string           // 成交价
+  confirm_date?: string | null
+  amount: string
+  fx_rate: string
+  shares?: string | null      // pending 场外买入可为 null
+  nav?: string | null
   fee: string
-  status: TransactionStatus
-  source: TransactionSource
-  notes?: string
+  realized_gain?: string | null
+  status: 'pending' | 'confirmed' | 'voided'
+  source: 'manual' | 'sip'
+  sip_plan_id?: number | null
+  transfer_group?: string | null
+  notes?: string | null
 }
 
-// 持仓行
 export interface Position {
   asset_code: string
   asset_name: string
   asset_type: AssetType
-  channel_name: string
+  channel_id: number | null    // group=asset 合并渠道后为 null
+  channel_name: string | null
+  venue: Venue
+  currency: Currency
   shares: string
-  cost_per_share: string   // 摊薄成本单价
-  remaining_cost: string   // 剩余成本
-  latest_price: string
-  price_date: string
-  market_value: string
-  holding_gain: string
-  holding_gain_pct: string
+  cost_per_share: string       // 原币摊薄单价（含费）
+  remaining_cost: string       // CNY
+  remaining_cost_original: string
+  cost_fx_rate: string
+  latest_price: string | null
+  price_date: string | null
+  market_value: string | null  // CNY
+  market_value_original: string | null
+  holding_gain: string | null
+  holding_gain_pct: string | null
+  cumulative_gain_pct: string | null
   realized_gain: string
   holding_days: number
   weight: string
   fee_total: string
 }
 
-// 总览头部
 export interface Summary {
   total_market_value: string
-  daily_gain: string
-  daily_gain_pct: string
+  daily_gain: string | null
+  daily_gain_pct: string | null
   total_gain: string
   total_gain_pct: string
   cost_basis: string
   in_transit: string
   holding_days: number
-  price_updated_at: string
+  annualized_return: string | null
+  price_as_of: string
+  fx_as_of: string | null
+  price_missing: number
+  fx_missing: number
 }
 
-// 定投计划
-export type SIPFrequency = 'weekly' | 'biweekly' | 'monthly'
-export type SIPStatus = 'active' | 'paused' | 'ended'
+export type SipFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly'
 
 export interface SIPPlan {
   id: number
@@ -201,249 +180,220 @@ export interface SIPPlan {
   channel_id: number
   channel_name: string
   amount: string
-  frequency: SIPFrequency
-  deduction_day: number
+  frequency: SipFrequency
+  deduction_day: number | null   // daily 为 null
+  on_non_trading: 'postpone' | 'skip' // daily 不适用
   start_date: string
   end_type: 'unlimited' | 'by_count' | 'by_date'
-  end_count?: number
-  end_date?: string
-  status: SIPStatus
-  next_deduction_date?: string
+  end_count?: number | null
+  end_date?: string | null
+  status: 'active' | 'paused' | 'ended'
+  next_deduction_date: string | null
   total_invested: string
+  due_unconfirmed: number
+  last_skip_reason?: string | null
 }
+
+export interface Channel {
+  id: number
+  name: string
+  type: 'third_party' | 'bank' | 'broker' | 'direct'
+  is_default: boolean
+  is_archived: boolean
+}
+
+export interface Paginated<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
+export interface PositionTotals {
+  count: number
+  market_value: string
+  remaining_cost: string
+  holding_gain: string
+  holding_gain_pct: string
+  missing_price: number
+  missing_fx: number
+}
+
+export type PositionsResponse = Paginated<Position> & { totals: PositionTotals }
 ```
+
+**注意**：金额、份额、价格、汇率全部是字符串；`null` 表示「没有」，不要与 `"0"` 混用。
 
 ---
 
-## 四、数据来源
+## 四、API 层约定
 
-**不再保留 Mock 数据**。所有 composable 直接调用 `api/portfolio.ts` 里的接口，
-接口未实现时由 composable 捕获错误并置空列表，页面渲染空状态 + 顶部错误提示条。
+### 4.1 响应与分页
 
-之所以删掉假数据：假数据会掩盖接口契约问题（字段名、空值、分页、错误码），
-页面在「永远有数据」的状态下开发，等真接口接上才发现对不上。
+- 列表统一 `{ count, next, previous, results }`，参数 `page` / `page_size`
+- 持仓额外带 `totals`（全量，不随分页变）
+- 价格与快照区间接口**不分页**，按 `from` / `to` 一次返回
+
+### 4.2 错误
+
+非 2xx 返回 `{ detail, fields? }`。`client.ts` 已解析 `detail`，新增逻辑：若存在 `fields`，在表单对应字段下展示细分提示，没有则只弹顶部提示条。
+
+### 4.3 幂等
+
+创建交易与转移时生成 `client_request_id`（`crypto.randomUUID()`），提交失败重试复用同一个值；成功后清空。转移请求与普通交易一样带该字段。
+
+### 4.4 请求体
+
+| 操作 | 字段 |
+|---|---|
+| 记一笔 | `asset_code`、`channel_id`、`venue`、`type`、`trade_date`、`amount`、`shares?`、`nav?`、`fee?`、`fx_rate?`、`sip_plan_id?`、`notes?`、`client_request_id` |
+| 转移 | `asset_code`、`from_channel_id`、`from_venue`、`to_channel_id`、`to_venue`、`shares`、`trade_date`、`fee?`、`client_request_id` |
+| 确认 | `shares`、`nav`、`fee?`（`confirm_date` 不由前端传） |
+| 手工价格 | `date`、`kind`、`price` |
+| 手工汇率 | `date`、`base`、`quote`、`rate` |
+| 设置 | `price_sync_enabled?`、`fx_sync_enabled?` |
+
+---
 
 ## 五、Composable 层
 
-每个 composable 负责「请求 → 错误处理 → 派生计算」，接口签名统一：
+| Composable | 返回 | 要点 |
+|---|---|---|
+| `useSummary` | `summary`、`error`、`fetch` | 60 秒刷新；`price_as_of` / `fx_as_of` 用于显示新鲜度 |
+| `usePositions` | `items`、`totals`、`page`、`ordering`、`includeZero`、`fetch` | 排序与分页全部交给服务端，前端不再本地排序 |
+| `useTransactions` | `pending`、`items`、`total`、筛选、`page`、`fetch` | 待确认用 `status=pending` 单独请求 |
+| `useSipPlans` | `plans`、`create`、`update`、`setStatus` | 结束后不可恢复；结束时提示未确认交易 |
+| `useChannels` | `channels`、`create`、`update`、`remove` | 删除前检查引用，409 时提示改成归档 |
+| `useAssetDetail` | `asset`、`prices`（按 kind 分组）、`position`、`recentTransactions` | 一次请求拿全；手工价格写入后局部刷新 |
 
-```ts
-// 模式一：返回 reactive 数据 + 操作方法
-export function usePositions() {
-  const positions = ref<Position[]>([])
-  const viewMode = ref<'by_asset' | 'by_channel'>('by_asset')
-  const sortKey = ref<string>('market_value')
-  const sortOrder = ref<'asc' | 'desc'>('desc')
-  const visibleColumns = ref<Set<string>>(new Set(DEFAULT_COLUMNS))
-
-  const sorted = computed(() => { /* 排序 + 过滤 */ })
-  const totals = computed(() => { /* 合计行 */ })
-
-  function toggleColumn(key: string) { }
-  function setSort(key: string) { }
-  function fetch() { /* S4: API 替换 */ }
-
-  return { positions, viewMode, sorted, totals, visibleColumns, toggleColumn, setSort, fetch }
-}
-
-// 模式二：直接返回数据 + refresh
-export function useSummary() {
-  const summary = ref<Summary | null>(null)
-  const loading = ref(false)
-  async function fetch() { /* mock → API */ }
-  return { summary, loading, fetch }
-}
-```
-
-全局共享策略：每个页面独立创建 composable 实例，不跨页面共享（避免页面间无关的状态污染）。
+每个 composable 保留 `loading` 与 `error`；页面用 `ErrorBanner` 展示，列表置空走空状态。不要在前端重算收益。
 
 ---
 
-## 六、路由
+## 六、路由与导航
 
-`router/index.ts` 新增路由：
+| 路由 | 页面 | 说明 |
+|---|---|---|
+| `/login` | 登录 | 公开 |
+| `/` | 总览 | 默认页 |
+| `/transactions` | 交易 | 含待确认、流水、分页 |
+| `/sips` | 定投 | 计划卡片 |
+| `/analysis` | 分析 | 二期占位 |
+| `/settings` | 设置 | 渠道、数据源、数据、外观 |
+| `/assets/:code` | 资产详情 | 下钻页 |
 
-```ts
-const routes = [
-  { path: '/login', name: 'Login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
-  { path: '/', name: 'Overview', component: () => import('@/views/HomeView.vue') },
-  { path: '/transactions', name: 'Transactions', component: () => import('@/views/TransactionsView.vue') },
-  { path: '/sips', name: 'Sips', component: () => import('@/views/SipsView.vue') },
-  { path: '/analysis', name: 'Analysis', component: () => import('@/views/AnalysisView.vue') },
-  { path: '/settings', name: 'Settings', component: () => import('@/views/SettingsView.vue') },
-  { path: '/assets/:code', name: 'AssetDetail', component: () => import('@/views/AssetDetailView.vue') },
-]
-```
-
-登录守卫不变。`/login` 保持为公开页，其余全部要求登录。
-
----
-
-## 七、样式策略
-
-**增量改，不重写**。现有 `style.css` 已有完整的 CSS 变量体系（`--bg`、`--surface`、`--accent`、`--ok`、`--error` 及深色模式），新增变量不改旧变量：
-
-```css
-:root {
-  --up: #ef4444;        /* 涨（红涨绿跌默认） */
-  --up-soft: rgba(239, 68, 68, 0.12);
-  --down: #12b76a;      /* 跌 */
-  --down-soft: rgba(18, 183, 106, 0.12);
-  --sidebar-width: 200px;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-}
-```
-
-绿涨红跌开关通过切换 CSS 类实现（`:root.green-up { --up / --down 互换 }`），存 localStorage。
-
-**组件样式**：写在 `<style scoped>` 里，复用 CSS 变量。不使用 Tailwind/UI 框架，保持现有纯 CSS 路线。
+- 桌面顶部导航五个入口（吸顶、当前页下划线）；移动端顶栏保留 Logo 与用户，入口沉到底部五 tab
+- 导航与内容区不再有 160px 的侧栏占位，`.app-main` 不需要左边距
+- 资产详情左上角返回按钮，返回时恢复来源页的筛选与滚动位置（用 `router.back()` + 页面缓存，或把筛选写进 query）
+- 进入详情时保留来源标识，从交易页进来时返回交易页而不是总览
 
 ---
 
-## 八、S1：骨架搭建
+## 七、S4 改造清单
 
-### 8.1 AppLayout.vue
+### 7.1 类型与 API
 
-替换当前 `App.vue` 中的顶栏布局。结构：
+1. 重写 `types/portfolio.ts` 为 §三 的内容
+2. `api/portfolio.ts`：所有列表函数返回 `Paginated<T>`；`fetchPositions` 返回 `PositionsResponse`
+3. 新增：手工价格 `upsertPrice` / `deletePrice`、手工汇率、`fetchSettings` / `updateSettings`、`fetchSyncResult`、`recalculateSnapshots`、`clearData`、`createTransfer`
+4. 请求体按 §4.4 组装；创建类自动带 `client_request_id`
 
-```html
-<div class="app-layout">
-  <AppSidebar />
-  <main class="app-main">
-    <router-view />
-  </main>
-</div>
-```
+### 7.2 总览
 
-侧栏固定宽度 `var(--sidebar-width)`，内容区 `flex: 1`，背景色 `var(--bg)`。无顶栏——用户头像和菜单放在侧栏底部、内容区右上角。
+- `usePositions` 改为服务端分页与排序，参数 `ordering`、`include_zero`、`page`
+- 合计行直接用服务端 `totals`，不再累加当前页
+- 指标条下方显示「价格更新至 · 汇率更新至」；`price_missing` / `fx_missing` 大于 0 时追加提示并可跳设置
+- 工具栏加「显示已清仓」开关，对应 `include_zero`
+- 表格列加「场所」，外币行价格后标币种；缺价行显示「—」并保留在列表
 
-### 8.2 AppSidebar.vue
+### 7.3 交易页
 
-从上到下三段：
+- 流水表加「操作」列：手动/场内的待确认给修改、删除、确认；定投生成的只给作废与确认；已确认只给撤销
+- 撤销转移弹确认「将同时撤销转出与转入两笔」
+- 加「场所」列与来源筛选（定投 / 手动）
+- 底部接 `Pagination`；待确认区独立请求，不随流水翻页
+- 删除待确认走 `DELETE`；定投生成的按钮文案为「作废」，走 `void`
 
-1. **Logo 区**：圆角方块 + 系统名称「Fund Pooling」（沿用 `App.vue` 里的 brand 样式）
-2. **导航项**：五个 `<router-link>`，当前页高亮（`router-link-active`）
-3. **用户区**：头像（首字母圆形）+ 用户名 + 下拉菜单（设置、退出登录）
+### 7.4 记一笔与转移
 
-每个导航项 = Emoji 图标 + 文字。高亮态用 `--accent-soft` 背景 + `--accent` 左边框。
+- 表单加「场所」选择；场外买入的份额与价格可留空
+- 外币资产显示「成交汇率」，默认当日汇率、可改
+- 类型切到「转移」时切换为 `TransferForm`：转出渠道/场所 → 转入渠道/场所 → 份额；
+  金额（结转成本）只读展示，由系统算；提交走 `/transactions/transfer/`
+- 按类型动态显示字段：现金分红只要金额；红利再投要金额、份额、价格；份额调整只要份额增量
 
-### 8.3 所有 View 空壳
+### 7.5 定投
 
-每个 View 文件 = `<template>` + 标题 + `<script setup>` 空壳。分析页额外显示「分析功能将在后续版本上线」的 EmptyState。
+- `SipForm` 周期加「每日」；选每日时隐藏扣款日与「遇非交易日」
+- 固定日期型显示「遇非交易日：顺延（默认）/ 跳过」
+- `SipCard` 显示下次扣款日、累计已投、到期未确认笔数、上次跳过原因；状态标签区分
+  「进行中 / 已暂停 / 已结束」，并按策略显示「顺延至 X」「本期跳过」「本期未执行」
+- 编辑走 `PATCH`；「结束」后不可恢复，结束时提示仍未确认的交易
 
-### 8.4 旧代码改动
+### 7.6 资产详情
 
-- `App.vue`：删除旧顶栏，改挂 `AppLayout`
-- `HomeView.vue`：删除旧健康检查内容，改为空壳（S2 重写）
-- `style.css`：去掉 `.app`（替换为 `.app-layout`）、保留 `.topbar` / `.brand` 供侧栏复用
+- 头部：场外只显示净值；上市资产显示「收盘价 · 净值 · 折溢价」
+- 价格区块：区间切换 + 净值/收盘价切换；下方「最近价格」列表带来源（自动 / 手工）与删除
+- `PriceEditor`：选日期、填价格；保存后刷新持仓与指标
+- 持仓摘要：行内「成本价」原币、合计「持仓成本」CNY，三个收益率并排并标注口径
+- 最近交易：默认 10 条，跳交易页时带 `asset` 筛选
 
----
+### 7.7 设置
 
-## 九、S2：总览页
-
-### 9.1 AssetCards.vue
-
-6 个数字卡片，水平排列（flex wrap）。每个卡片：标签 + 数字（大号）+ 颜色（涨红跌绿）。
-
-涨跌数字同时带颜色、`+/-` 符号和箭头 `↑↓`。
-
-底部灰色小字「更新于 HH:MM:SS」，60 秒自动拉一次 `useSummary().fetch()`。
-
-### 9.2 PositionTable.vue
-
-标准 `<table>`，渲染 `usePositions().sorted`。
-
-- **表头**：固定（sticky top），每列可点击排序。当前排序列显示 `▲` 或 `▼`
-- **表体**：数字列 `text-align: right`，字体等宽（`--font-mono`）。涨/跌用颜色 + 符号
-- **合计行**：sticky bottom，数据来自 `usePositions().totals`
-- **行点击**：`router.push('/assets/' + row.asset_code)`
-- **空状态**：无数据时渲染 EmptyState 组件
-
-### 9.3 ColumnSettings.vue
-
-弹出面板（`position: absolute`，从工具栏「列设置」按钮下方弹出）。
-
-列出所有可用列，每行一个 `<label><input type="checkbox">`，绑定 `visibleColumns`。底部「重置」按钮恢复默认 8 列。
-
-拖拽排序用原生 `dragstart/dragover/drop` 事件，排完后更新 `visibleColumns` 的存储顺序。顺序写 localStorage，下次打开保持。
-
-### 9.4 视图切换
-
-工具栏两个 `<button>`：「按资产」「按渠道」。切换 `viewMode`。按渠道视图时表格多一列「渠道」，资产同名合并仅在按资产视图生效。渠道列在按渠道视图中移到资产列之后。
-
-### 9.5 RecordEntry.vue（记一笔浮层）
-
-挂载在 `App.vue` 层，用 `<Teleport to="body">`。全屏半透明遮罩 + 居中白色面板。
-
-表单分两段：类型选择（初始持仓 / 买入 / 卖出 / 分红 / 红利再投 / 份额调整）→ 根据类型动态显示字段。初始持仓时隐藏价格字段、成本标签改为「累计投入」、额外显示「已实现收益」字段。
-
-提交逻辑：S3 阶段 console.log，S4 调 API。提交后关闭浮层，刷新持仓数据。
+- 渠道：新建、设为默认、归档、删除；被定投计划引用的渠道提示「已使用，只能归档」
+- 数据源：价格/汇率开关、最后同步时间、失败清单、「立即同步」、手工填汇率（可删除）
+- 数据：导出、重算快照（选区间，展示重算与跳过原因）、清空数据（写明范围与确认文案）
+- 外观：明暗、绿涨红跌
 
 ---
 
-## 十、S3：其他页面
+## 八、视觉与交互规范
 
-### 10.1 交易页 TransactionsView.vue
-
-三个区域：`PendingSection` + 筛选栏 + `TransactionTable`。
-
-**PendingSection**：遍历 `useTransactions().pending`，每条一行 + 确认按钮。点击确认弹出 `ConfirmDialog`。
-
-**ConfirmDialog**：显示资产、类型、金额，三个可编辑字段（份额、净值、手续费），灰色参考值（定投时从计划推、手动时空白）。确认后调 confirm API，本地列表即时移除该条。
-
-**CsvImport**：拖拽区 + 比对结果列表。比对结果分三类：匹配（绿色 ✓ 跳过）、新增（蓝色 + 将导入）、冲突（橙色 ⚠ 二选一）。用户逐条解决冲突后点「导入 N 条」。
-
-### 10.2 定投页 SipsView.vue
-
-`SipCard` 网格（2 列），每张卡片展示：资产名称、渠道、每期金额、周期描述、下次扣款日、累计已投、状态点（绿/黄/灰 = active/paused/ended）。
-
-操作按钮按状态变化：active → [暂停] [修改] [结束]；paused → [恢复] [修改] [结束]；ended → 只读。
-
-新建/编辑用 `SipForm` 浮层：资产搜索、渠道选择、金额、周期（每周/biweekly/每月）、扣款日（月选 1–28 日、周选周几）、开始日期、结束条件。
-
-### 10.3 资产详情页 AssetDetailView.vue
-
-路由参数 `code` → `useAssetDetail(code)`。四个区域：
-
-1. 资产头部：名称 + 类型 + 风险等级 + 最新价格 + 日期
-2. 我的持仓：按渠道分行 + 合计行（来源 usePositions 按 code + channel 过滤）
-3. 净值走势：折线图（SVG 手写或轻量 chart 库，S3 阶段可用纯 CSS）
-4. 交易时间线：按日期倒序，最近 10 条，底部「查看全部 →」跳转交易页并预填资产筛选
-
-### 10.4 设置页 SettingsView.vue
-
-**ChannelManager**：表格（名称、类型、默认、归档），行操作（设为默认、归档/取消归档、编辑名称）。新建弹窗：名称 + 类型下拉。
-
-**价格源区**：开关 + 最后同步时间 + 手动同步按钮。按钮点击后有加载态 + 结果提示（成功 N 只 / 失败 M 只）。
-
-**外观区**：明/暗/跟随系统三选一 radio。绿涨红跌 toggle 开关。
-
-**数据区**：数据导出按钮、清空数据入口（二次确认 + 输入文本确认）。
-
-### 10.5 EmptyState 与 ErrorBanner
-
-`EmptyState`：居中显示图标 + 标题 + 描述 + 可选操作按钮。各页面按空状态表渲染不同文案。
-
-`ErrorBanner`：固定顶部提示条，黄色背景，可关闭。用于价格同步失败等全局提醒。
+- 色板与字号沿用现有 `style.css`：slate 灰阶、蓝色主色、涨跌色双向可切
+- 数字用 `font-variant-numeric: tabular-nums`；金额千分位两位、份额最多四位、价格四位
+- 状态用浅色胶囊标签；来源（定投/手动）用细边框小标签
+- 空值统一「—」，不显示 0；缺价与缺汇率在悬浮提示中说明原因
+- 涨跌同时用颜色、正负号、方向箭头，不只靠颜色
+- 图表系列色避开红绿，用中性色或蓝紫色
 
 ---
 
-## 十一、S4：对接后端（前端侧已完成）
+## 九、验收清单
 
-前端侧已完成对接：每个 composable 的 `fetch()` 调用 `api/portfolio.ts` 对应函数，
-捕获 `ApiError` 写入 `error`，页面用 `ErrorBanner` 展示，列表置空走空状态。
-
-后端就绪后不需要再改前端，只需让接口返回约定结构：列表统一 `{ results: [...] }`，
-总览与详情返回单个对象。
+- [ ] 类型与接口返回一一对应，`npm run type-check` 零报错
+- [ ] 持仓翻页后合计不变，与总览数字一致
+- [ ] 排序切换走服务端，翻页后顺序稳定
+- [ ] 场外买入不填份额可提交，确认后持仓出现
+- [ ] 定投待确认只能作废，不会因重跑重复生成
+- [ ] 转移提交一次生成两笔，撤销一笔两笔同时撤销
+- [ ] 外币行显示原币价格与 CNY 市值，缺汇率时显示「—」并提示
+- [ ] 手工价格可写、可删，删除后同步能补回
+- [ ] 缺价行计入只数但不计入金额合计，页面有提示
+- [ ] 移动端五 tab 与桌面入口一致，资产详情能返回原页
 
 ---
 
-## 十二、踩坑预警
+## 十、已知问题与踩坑
 
-1. **CSRF**：所有 POST/PATCH/DELETE 请求走 `client.ts` 统一封装，自动带 `X-CSRFToken`。不要手写 fetch。
-2. **数字格式化**：金额千分位用 `Intl.NumberFormat('zh-CN')`，份额/净值保留 4 位小数用 `toLocaleString`。所有格式化逻辑抽到 `utils/format.ts`，不在模板里写。
-3. **空值 vs 0**：后端可能返回 `null`（无净值）或 `"0.0000"`（零份额），模板中统一判断 `value != null` 而非 `value`。空值显示「—」，0 显示 `0.00`。
-4. **表头 sticky 与 overflow**：`position: sticky` 在 `<table>` 上需要 th/td 配合。表头的 sticky top 与合计行的 sticky bottom 分别在 thead 和 tfoot 上实现，tbody 不要设 overflow（用页面级滚动）。
-5. **侧栏宽度与固定**：侧栏用 `position: fixed` + `overflow-y: auto`，内容区 `margin-left: var(--sidebar-width)`，不走 flex 布局（避免内容区随侧栏内容变长而偏移）。
-6. **移动端降级**：用 CSS media query `max-width: 768px` 触发。侧栏变为底部导航栏（`position: fixed; bottom: 0`），表格用 `display: block` 逐行折叠为卡片。S3 阶段只做 CSS 降级，不做独立的移动端组件。
-7. **深色模式**：所有新增组件颜色使用 CSS 变量，不做硬编码色值。涨跌色变量在 `.green-up` 类下互换。
+| 问题 | 处理 |
+|---|---|
+| 重新部署后旧页面点击导航无反应 | 路由已监听动态模块加载失败，自动刷新一次（`sessionStorage` 防循环） |
+| CSRF | 所有写请求走 `client.ts`，不要手写 fetch |
+| Decimal 用字符串 | 不要 `parseFloat` 后直接回写，格式化与计算分离 |
+| `null` 与 `0` | 用 `value != null` 判断；`0.00` 是合法值 |
+| 表格 sticky | 表头 sticky 在 `thead`、合计行 sticky 在 `tfoot`，`tbody` 不设 overflow |
+| 60 秒刷新 | 只刷新 summary，不打断正在编辑的表单 |
+| 日期 | 全部按 `YYYY-MM-DD` 字符串处理，不构造 `Date` 再格式化，避免时区偏移 |
+| 分页与筛选 | 筛选变化时回到第 1 页；页面刷新后保留筛选（写进 query） |
+
+---
+
+## 修订记录
+
+| 版本 | 日期 | 变更 |
+|---|---|---|
+| v1 | 2026-11-25 | 初稿：分步实施、目录、类型、Mock 规划、composable、路由、样式、页面拆解 |
+| v2 | 2026-11-25 | 页面与样式完成；移除 mock，composable 直连接口并统一错误提示 |
+| v3 | 2026-11-26 | 对齐新契约：类型重写（venue/currency/market/transfer/双池/分页）、S4 改造清单、新增组件（转移、价格编辑、分页、数据源）、移动端五 tab、验收清单更新 |
+| v4 | 2026-11-26 | 导航由侧栏改为顶栏，目录与路由说明同步 |
+| v5 | 2026-11-26 | 前端代码回退到登录 + 服务状态页，本文改为「待实现」的目标说明 |
