@@ -1,104 +1,104 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import AssetCards from '@/components/overview/AssetCards.vue'
-import PositionTable from '@/components/overview/PositionTable.vue'
-import RecordEntry from '@/components/overview/RecordEntry.vue'
-import EmptyState from '@/components/shared/EmptyState.vue'
-import ErrorBanner from '@/components/shared/ErrorBanner.vue'
-import { usePositions } from '@/composables/usePositions'
-import { useSummary } from '@/composables/useSummary'
+import { ApiError } from '@/api/client'
+import { fetchHealth, type HealthResponse } from '@/api/system'
+import StatusCard from '@/components/StatusCard.vue'
 
-const {
-  summary, loading: summaryLoading, error: summaryError, fetch: fetchSummary,
-} = useSummary()
-const {
-  displayed, totals, viewMode, sortKey, sortDir,
-  visibleColumns, loading: posLoading, error: posError,
-  toggleColumn, resetColumns, setSort, fetch: fetchPositions,
-} = usePositions()
+const health = ref<HealthResponse | null>(null)
+const loading = ref(true)
+const error = ref<string | null>(null)
+const lastUpdated = ref<Date | null>(null)
+let refreshTimer: number | undefined
 
-const bannerDismissed = ref(false)
-const banner = computed(() =>
-  bannerDismissed.value ? null : (summaryError.value ?? posError.value),
+const apiStatus = computed<'ok' | 'error' | 'unknown'>(() =>
+  health.value ? 'ok' : error.value ? 'error' : 'unknown',
+)
+const databaseStatus = computed<'ok' | 'error' | 'unknown'>(
+  () => health.value?.database.status ?? 'unknown',
+)
+const databaseLatency = computed(() =>
+  health.value ? `${health.value.database.latency_ms.toFixed(1)} ms` : '—',
+)
+const backendVersion = computed(() => health.value?.version ?? '—')
+const environment = computed(() => {
+  if (!health.value) return '—'
+  return health.value.debug ? '开发模式' : '生产模式'
+})
+const updatedAt = computed(() =>
+  lastUpdated.value
+    ? lastUpdated.value.toLocaleTimeString('zh-CN', { hour12: false })
+    : '—',
 )
 
-const recordOpen = ref(false)
-let timer: ReturnType<typeof setInterval> | undefined
-
-async function loadAll() {
-  await Promise.all([fetchSummary(), fetchPositions()])
+async function loadHealth() {
+  loading.value = true
+  try {
+    health.value = await fetchHealth()
+    error.value = null
+    lastUpdated.value = new Date()
+  } catch (err) {
+    health.value = null
+    error.value = err instanceof ApiError ? err.message : '无法连接后端服务'
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(() => {
-  loadAll()
-  timer = setInterval(() => fetchSummary(), 60_000)
+  void loadHealth()
+  refreshTimer = window.setInterval(() => void loadHealth(), 15_000)
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (refreshTimer) window.clearInterval(refreshTimer)
 })
-
-const loading = computed(() => summaryLoading.value || posLoading.value)
 </script>
 
 <template>
-  <div class="page">
-    <ErrorBanner v-if="banner" :message="banner" @dismiss="bannerDismissed = true" />
+  <main class="content">
+    <section class="hero">
+      <h2>服务运行状态</h2>
+      <p>每 15 秒自动刷新后端与数据库健康状态。</p>
+    </section>
 
-    <AssetCards :summary="summary" :loading="loading" />
+    <p v-if="error" class="alert" role="alert">{{ error }}</p>
 
-    <div style="height: 24px" />
-
-    <div v-if="displayed.length > 0">
-      <PositionTable
-        :positions="displayed"
-        :view-mode="viewMode"
-        :sort-key="sortKey"
-        :sort-dir="sortDir"
-        :visible-columns="visibleColumns"
-        :totals="totals"
-        @sort="setSort"
-        @update:view-mode="viewMode = $event"
-        @toggle-col="toggleColumn"
-        @reset-cols="resetColumns"
+    <section class="grid">
+      <StatusCard
+        title="API 服务"
+        :value="health ? '运行中' : '不可用'"
+        :status="apiStatus"
+        :hint="`后端版本 ${backendVersion}`"
       />
-    </div>
-
-    <div v-else-if="!loading" style="padding-top: 40px;">
-      <EmptyState
-        title="还没有持仓"
-        description="先创建渠道，再录入初始持仓或导入 CSV"
+      <StatusCard
+        title="PostgreSQL"
+        :value="databaseStatus === 'ok' ? '已连接' : '异常'"
+        :status="databaseStatus"
+        :hint="`查询耗时 ${databaseLatency}`"
       />
-    </div>
+      <StatusCard
+        title="运行环境"
+        :value="environment"
+        :status="health ? 'ok' : 'unknown'"
+        :hint="`最后检测 ${updatedAt}`"
+      />
+      <StatusCard
+        title="前端"
+        value="Vue 3 + Vite"
+        status="ok"
+        hint="构建产物由 Django 在 /static/ 下提供"
+      />
+    </section>
 
-    <div class="fab" @click="recordOpen = true" title="记一笔">+</div>
-
-    <RecordEntry :show="recordOpen" @close="recordOpen = false" />
-  </div>
+    <section class="panel">
+      <h3>快速开始</h3>
+      <ul class="list">
+        <li><code>make up</code> 构建并启动数据库 + 应用容器</li>
+        <li><code>make dev</code> 本地开发模式（Vite 热更新 + Django 自动重载）</li>
+        <li><code>make migrate</code> 执行数据库迁移</li>
+        <li><code>make superuser</code> 创建后台管理员，访问 <a href="/admin/">/admin/</a></li>
+      </ul>
+    </section>
+  </main>
 </template>
-
-
-<style scoped>
-.fab {
-  position: fixed;
-  bottom: 32px;
-  right: 32px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 24px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  z-index: 400;
-  transition: transform 0.15s ease;
-}
-
-.fab:hover {
-  transform: scale(1.08);
-}
-</style>
