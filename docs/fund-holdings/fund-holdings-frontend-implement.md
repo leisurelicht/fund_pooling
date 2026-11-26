@@ -4,6 +4,10 @@
 >
 > 页面结构、样式、交互已完成；数据层改为直接调用 `/api` 接口。后端未实现前，
 > 页面显示空状态并在顶部提示接口错误。
+>
+> **注意：本文的类型定义与接口签名已落后于数据模型**（缺 currency / is_listed / venue /
+> transfer_group / 转移类型 / 分页 / 双池成本字段）。以后端接口对接时一起更新，不要照本文
+> 直接改类型。
 
 ---
 
@@ -50,7 +54,6 @@ frontend/src/
 │   ├── transactions/
 │   │   ├── PendingSection.vue # 新增：待确认区
 │   │   ├── TransactionTable.vue # 新增：流水表
-│   │   ├── CsvImport.vue      # 新增：CSV 导入
 │   │   └── ConfirmDialog.vue  # 新增：确认弹窗
 │   ├── sips/
 │   │   ├── SipCard.vue        # 新增：定投计划卡片
@@ -415,7 +418,7 @@ const routes = [
 
 **外观区**：明/暗/跟随系统三选一 radio。绿涨红跌 toggle 开关。
 
-**数据区**：CSV 导入入口、数据导出按钮（空实现，S4 对接）、清空数据入口（二次确认 + 输入文本确认）。
+**数据区**：数据导出按钮、清空数据入口（二次确认 + 输入文本确认）。
 
 ### 10.5 EmptyState 与 ErrorBanner
 
